@@ -44,11 +44,12 @@ See spec/interval_tree_spec.rb for details.
 ```ruby
 require "interval_tree"
 
-itv = [(0...3), (1...4), (3...5), (0...3)]
+itv = [(0...3), (1...4), (2...10), (3...5), (0...3)]
 t = IntervalTree::Tree.new(itv)
-p t.search(2)     #=> [0...3, 1...4]
-p t.search(2, unique: false) #=> [0...3, 0...3, 1...4]
-p t.search(1...4) #=> [0...3, 1...4, 3...5]
+p t.search(2)     #=> [0...3, 1...4, 2...10]
+p t.search(2, unique: false) #=> [0...3, 0...3, 1...4, 2...10]
+p t.search(2, unique: false, sort: false) #=> [2...10, 0...3, 0...3, 1...4]
+p t.search(1...4) #=> [0...3, 1...4, 2...10, 3...5]
 ```
 
 ## Note

@@ -100,6 +100,16 @@ describe "IntervalTree::Tree" do
       end
     end
 
+    context 'with custom objects' do
+      CustomStruct = Struct.new(:begin, :end, :value)
+      context 'given [CustomStruct.new(1, 6, "value one"), CustomStruct.new(5, 11, "value two")]' do
+        it 'does not raise an exception' do
+          itvs = [CustomStruct.new(1, 6, "value one"), CustomStruct.new(5, 11, "value two")]
+          expect {IntervalTree::Tree.new(itvs)}.not_to raise_exception
+        end
+      end
+    end
+
     context 'with a custom range factory' do
       class ValueRange < Range
         attr_accessor :value
@@ -139,7 +149,7 @@ describe "IntervalTree::Tree" do
       let(:node) do
         IntervalTree::Node.new(
           12.5, # x_center
-          [ 10...14, 2...20 ], # s_center
+          [ 2...20, 10...14 ], # s_center
           left_node, # s_left
           right_node, # s_right
         )
@@ -237,6 +247,24 @@ describe "IntervalTree::Tree" do
       end
     end
 
+    context 'given [(0...30),(20...100)] and a sorted point query "25"' do
+      it 'returns [(0...30),(20...100)]' do
+        itvs = [(0...30),(20...100)]
+
+        results = IntervalTree::Tree.new(itvs).search(25, unique: false, sort: true)
+        expect(results).to match_array([(0...30),(20...100)])
+      end
+    end
+
+    context 'given [(0...30),(20...100)] and an unsorted point query "25"' do
+      it 'returns [(20...100),(0...30)]' do
+        itvs = [(0...30),(20...100)]
+
+        results = IntervalTree::Tree.new(itvs).search(25, unique: false, sort: false)
+        expect(results).to match_array([(20...100), (0...30)])
+      end
+    end
+
     context 'given [(0...8), (1...5), (2...6)] and a point query "3"' do
       it 'returns [(0...8), (1...5), (2...6)]' do
         itvs = [(0...8), (1...5), (2...6)]
@@ -275,10 +303,20 @@ describe "IntervalTree::Tree" do
         expect(results).to be == [(3...5), (3...9), (4...8)]
       end
     end
+    
+    context 'with unique defaulting to true, given intervals with duplicates' do
+      context 'given [(1...3), (3...5), (3...9), (4...8), (4...8)] and a query by (3...5)]' do
+        it 'removes the duplicates in the result' do
+          itv = [(1...3), (3...5), (3...9), (4...8), (4...8)]
+          t = IntervalTree::Tree.new(itv)
+          results = t.search((3...5))
+          
+          expect(results).to match_array([(3...5), (3...9), (4...8)])
+        end
+      end
 
-    context 'with unique defaulting to true' do
-      context 'given intervals with duplicates' do
-        it 'returns the duplicates in the result' do
+      context 'given [(0...3), (1...4), (3...5), (0...3)] and a query by (2)' do
+        it 'removes the duplicates in the result' do
           itv = [(0...3), (1...4), (3...5), (0...3)]
           t = IntervalTree::Tree.new(itv)
           results = t.search(2)
@@ -303,6 +341,31 @@ describe "IntervalTree::Tree" do
           expect(results).to match_array([(2...4)])
         end
       end
+
+      context 'given [(0...5), (1...5), (3...5), (3...5)] and a query by (3)' do
+        it 'returns [(0...5), (1...5), (3...5), (3...5)]' do
+          itvs = [(0...5), (1...5), (3...5), (3...5)]
+          results = IntervalTree::Tree.new(itvs).search(3, unique: false)
+          expect(results).to match_array([(0...5), (1...5), (3...5), (3...5)])
+        end
+      end
+
+      context 'given [(0...3), (1...4), (3...4), (3...4), (3...5)] and a query by (3)' do
+        it 'returns [(1...4), (3...4), (3...4), (3...5)]' do
+          itvs = [(0...3), (1...4), (3...4), (3...4), (3...5)]
+          results = IntervalTree::Tree.new(itvs).search(3, unique: false)
+          expect(results).to match_array([(1...4), (3...4), (3...4), (3...5)])
+        end
+      end
+
+      context 'given [(0...2), (0...2), (1...2), (1...2), (2...5)] and a query by (1)' do
+        it 'returns [(0...2), (0...2), (1...2), (1...2)]' do
+          itvs = [(0...2), (0...2), (1...2), (1...2), (2...5)]
+          results = IntervalTree::Tree.new(itvs).search(1, unique: false)
+          expect(results).to match_array([(0...2), (0...2), (1...2), (1...2)])
+        end
+      end
+
     end
 
     context "when concerned with performance" do
@@ -326,6 +389,39 @@ describe "IntervalTree::Tree" do
         needle = Time.utc(2020, 11, 5)...Time.utc(2020, 11, 6)
         results = IntervalTree::Tree.new(itvs).search(needle)
         expect(results).to eq(itvs)
+      end
+    end
+
+    context 'when using custom objects' do
+      CustomStruct = Struct.new(:begin, :end, :value)
+      context 'given [CustomStruct.new(1, 6, "value one"), CustomStruct.new(5, 11, "value two")]' do
+        it 'can search by point' do
+          itvs = [CustomStruct.new(1, 6, "value one"), CustomStruct.new(5, 11, "value two")]
+          tree = IntervalTree::Tree.new(itvs)
+          result = tree.search(2)
+          expect(result).to be_kind_of Array
+          item = result.first
+          expect(item).to be_kind_of CustomStruct
+          expect(item.value).to be == "value one"
+        end
+
+        it 'can search by range' do
+          itvs = [CustomStruct.new(1, 6, "value one"), CustomStruct.new(5, 11, "value two")]
+          tree = IntervalTree::Tree.new(itvs)
+          result = tree.search(4...7)
+          expect(result).to be == itvs
+          result = tree.search(9...20)
+          expect(result).to be_kind_of Array
+          item = result.first
+          expect(item).to be == CustomStruct.new(5, 11, "value two")
+        end
+
+        it 'can search by the custom object' do
+          itvs = [CustomStruct.new(1, 6, "value one"), CustomStruct.new(5, 11, "value two")]
+          tree = IntervalTree::Tree.new(itvs)
+          result = tree.search(CustomStruct.new(4,7))
+          expect(result).to be == itvs
+        end
       end
     end
   end
